@@ -1,0 +1,125 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// Business Settings
+model BusinessProfile {
+  id              Int      @id @default(1)
+  name            String
+  address         String
+  phone           String
+  email           String?
+  gstin           String
+  state           String   // e.g. "33-Tamil Nadu"
+  bankName        String
+  bankBranch      String
+  bankAccountNo   String
+  bankIfsc        String
+  bankHolderName  String
+  logo            String?  // Base64 logo
+  upiId           String?  // For QR code generation
+  terms           String   // Default terms & conditions
+  updatedAt       DateTime @updatedAt
+}
+
+// Customer Master
+model Customer {
+  id           String    @id @default(uuid())
+  name         String
+  address      String
+  contact      String
+  gstin        String?
+  state        String    // e.g. "33-Tamil Nadu"
+  balance      Float     @default(0.0) // Running outstanding balance
+  invoices     Invoice[]
+  createdAt    DateTime  @default(now())
+}
+
+// Item Master
+model Item {
+  id           String        @id @default(uuid())
+  name         String
+  designNo     String?
+  hsnCode      String        @default("500720")
+  unit         String        @default("Pcs") // Pcs, Mtr, Kg, etc.
+  price        Float         @default(0.0)
+  gstRate      Float         @default(5.0)   // e.g. 5 means 5%
+  stock        Float         @default(0.0)
+  trackStock   Boolean       @default(false)
+  minStock     Float         @default(0.0)   // Low-stock alert threshold
+  invoiceItems InvoiceItem[]
+  createdAt    DateTime      @default(now())
+}
+
+// Invoice Master
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNo       String        @unique // Format: e.g., INV-2026-0001
+  invoiceDate     DateTime
+  dueDate         DateTime?
+  ewayBillNo      String?
+  placeOfSupply   String
+  status          String        @default("Unpaid") // Unpaid, Paid, Partially Paid, Cancelled
+  paymentMode     String?       // Cash, UPI, Bank Transfer, Cheque
+  paymentDate     DateTime?
+  amountPaid      Float         @default(0.0)
+  
+  // Tax breakdown summaries
+  subTotal        Float         // Taxable value before tax
+  totalTax        Float         // Total GST amount
+  roundOff        Float         @default(0.0) // Rounding adjustment (+/-)
+  grandTotal      Float         // Total including tax and round-off
+  grandTotalWords String       // Grand total in Indian Rupee words
+  
+  // Customer details at time of billing (snapshot)
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName    String
+  customerAddress String
+  customerContact String
+  customerGstin   String?
+  customerState   String
+  
+  // Terms & Conditions and Bank Details snapshot
+  terms           String
+  bankDetails     String        // JSON or string formatted bank info
+  
+  // Items
+  items           InvoiceItem[]
+  
+  createdAt       DateTime      @default(now())
+}
+
+// Invoice Line Items
+model InvoiceItem {
+  id           String   @id @default(uuid())
+  invoiceId    String
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId       String?
+  item         Item?    @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  name         String   // Saved snapshot of item name
+  designNo     String?
+  hsnCode      String
+  quantity     Float
+  unit         String
+  price        Float    // Price per unit before tax
+  gstRate      Float    // Tax rate in % (e.g. 5)
+  gstAmount    Float    // Total GST for this line
+  lineTotal    Float    // Total amount including GST (taxable + GST)
+}
+
+// System Settings
+model Settings {
+  id             Int      @id @default(1)
+  invoicePrefix  String   @default("INV-2026-")
+  invoiceStartNo Int      @default(1)
+  defaultGstRate Float    @default(5.0)
+  enableEwayBill Boolean  @default(true)
+  ewayThreshold  Float    @default(50000.0)
+  trackInventory Boolean  @default(false)
+}
